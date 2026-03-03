@@ -51,6 +51,7 @@ RUN pip install --no-cache-dir \
 # Remaining training dependencies
 RUN pip install --no-cache-dir \
     pronouncing==0.2.0 \
+    pyarrow==14.0.2 \
     datasets==2.14.6 \
     deep-phonemizer==0.0.19 \
     pyyaml
