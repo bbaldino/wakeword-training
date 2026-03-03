@@ -5,15 +5,23 @@ Train custom wake word models for [openwakeword](https://github.com/dscripka/ope
 ## Quick Start
 
 ```bash
-# Build the image
-docker build -t wakeword-trainer .
-
-# Train a wake word
+# Pull the pre-built image from GHCR
 docker run --gpus all \
   -e WAKE_WORD="hey nanoclaw" \
   -v /mnt/user/ai/wakeword-data:/data \
   -v /mnt/user/ai/wakeword-output:/output \
-  wakeword-trainer
+  ghcr.io/bbaldino/wakeword-training:latest
+```
+
+Or build locally:
+
+```bash
+docker build -t wakeword-training .
+docker run --gpus all \
+  -e WAKE_WORD="hey nanoclaw" \
+  -v /mnt/user/ai/wakeword-data:/data \
+  -v /mnt/user/ai/wakeword-output:/output \
+  wakeword-training
 ```
 
 After training, copy the `.tflite` (or `.onnx`) model from the output directory and load it in `voice_pipeline.py`:
