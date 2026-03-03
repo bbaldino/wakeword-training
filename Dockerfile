@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Pin numpy<2 early — many dependencies (pyarrow, tensorflow, speechbrain) are incompatible with numpy 2.x
+RUN pip install --no-cache-dir "numpy<2"
+
 # Install PyTorch with CUDA 12.1 support first (before anything else pulls in CPU-only torch)
 RUN pip install --no-cache-dir \
     torch torchaudio --index-url https://download.pytorch.org/whl/cu121
@@ -50,6 +53,7 @@ RUN pip install --no-cache-dir \
 
 # Remaining training dependencies
 RUN pip install --no-cache-dir \
+    "numpy<2" \
     pronouncing==0.2.0 \
     pyarrow==14.0.2 \
     datasets==2.14.6 \
