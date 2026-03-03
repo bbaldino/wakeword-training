@@ -85,7 +85,8 @@ def download_fma():
     os.makedirs(output_dir, exist_ok=True)
 
     fma_dataset = datasets.load_dataset(
-        "rudraml/fma", name="small", split="train", streaming=True, trust_remote_code=True
+        "rudraml/fma", name="small", split="train", trust_remote_code=True,
+        cache_dir=os.path.join(DATA_DIR, "hf_cache"),
     )
     fma_dataset = iter(
         fma_dataset.cast_column("audio", datasets.Audio(sampling_rate=16000))
