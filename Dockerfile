@@ -55,8 +55,8 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     "numpy<2" \
     pronouncing==0.2.0 \
-    pyarrow==14.0.2 \
-    datasets==2.14.6 \
+    pyarrow==15.0.2 \
+    datasets==2.21.0 \
     deep-phonemizer==0.0.19 \
     pyyaml
 

@@ -43,7 +43,7 @@ def download_mit_rirs():
 
 
 def download_audioset():
-    """Download one AudioSet tar, extract, and convert to 16kHz WAV."""
+    """Download AudioSet balanced-train split via HuggingFace streaming and convert to 16kHz WAV."""
     output_dir = os.path.join(DATA_DIR, "audioset_16k")
     if os.path.exists(output_dir) and len(os.listdir(output_dir)) > 10:
         print(f"  AudioSet already present ({len(os.listdir(output_dir))} files), skipping")
@@ -51,37 +51,25 @@ def download_audioset():
 
     import datasets
 
-    tar_dir = os.path.join(DATA_DIR, "audioset_raw")
-    os.makedirs(tar_dir, exist_ok=True)
-
-    fname = "bal_train09.tar"
-    tar_path = os.path.join(tar_dir, fname)
-
-    if not os.path.exists(tar_path):
-        print("  Downloading AudioSet tar (~2GB)...")
-        link = f"https://huggingface.co/datasets/agkphysics/AudioSet/resolve/main/data/{fname}"
-        subprocess.run(["wget", "-q", "--show-progress", "-O", tar_path, link], check=True)
-
-    print("  Extracting AudioSet...")
-    subprocess.run(["tar", "-xf", tar_path, "-C", tar_dir], check=True)
-
-    print("  Converting AudioSet to 16kHz WAV...")
+    print("  Streaming AudioSet balanced-train split from HuggingFace...")
     os.makedirs(output_dir, exist_ok=True)
-    audio_files = list(Path(tar_dir).glob("**/audio/**/*.flac"))
-    if not audio_files:
-        audio_files = list(Path(tar_dir).glob("**/*.flac"))
 
-    audioset_dataset = datasets.Dataset.from_dict({"audio": [str(f) for f in audio_files]})
-    audioset_dataset = audioset_dataset.cast_column("audio", datasets.Audio(sampling_rate=16000))
+    audioset = datasets.load_dataset(
+        "agkphysics/AudioSet", "balanced", split="train", streaming=True
+    )
+    audioset = audioset.cast_column("audio", datasets.Audio(sampling_rate=16000))
 
-    for row in tqdm(audioset_dataset, desc="  AudioSet 16kHz"):
-        name = row["audio"]["path"].split("/")[-1].replace(".flac", ".wav")
+    count = 0
+    for row in tqdm(audioset, desc="  AudioSet 16kHz"):
+        audio = row["audio"]
+        name = f"audioset_{count:06d}.wav"
         scipy.io.wavfile.write(
             os.path.join(output_dir, name),
             16000,
-            (row["audio"]["array"] * 32767).astype(np.int16),
+            (audio["array"] * 32767).astype(np.int16),
         )
-    print(f"  Saved {len(os.listdir(output_dir))} AudioSet files")
+        count += 1
+    print(f"  Saved {count} AudioSet files")
 
 
 def download_fma():
