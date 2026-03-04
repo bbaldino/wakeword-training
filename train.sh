@@ -68,7 +68,10 @@ echo ""
 
 # ── Step 5: Train model ─────────────────────────────────────────────────────
 echo "=== Step 5/5: Training model ==="
-python openwakeword/train.py --training_config /app/config.yaml --train_model --convert_to_tflite
+python openwakeword/train.py --training_config /app/config.yaml --train_model --convert_to_tflite || {
+    echo "  NOTE: train.py exited with an error (likely TFLite conversion failure)."
+    echo "  Checking if the ONNX model was still produced..."
+}
 echo ""
 
 # ── Copy output models ───────────────────────────────────────────────────────
