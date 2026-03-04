@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # System dependencies
 RUN apt-get update && apt-get install -y \
     python3.10 python3.10-venv python3.10-dev python3-pip \
-    ffmpeg libspeexdsp-dev git wget \
+    ffmpeg libspeexdsp-dev espeak-ng git wget \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
@@ -26,7 +26,7 @@ RUN git clone https://github.com/dscripka/piper-sample-generator \
        'https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt'
 
 # Install piper TTS dependencies
-RUN pip install --no-cache-dir piper-phonemize webrtcvad
+RUN pip install --no-cache-dir piper-phonemize espeak-phonemizer webrtcvad
 
 # Clone and install openwakeword (base only, not [full] to avoid dep conflicts)
 RUN git clone https://github.com/dscripka/openwakeword \
