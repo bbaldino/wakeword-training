@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Configure — Wake Word Training{% endblock %}
+
+{% block content %}
+<h2>Configure Training</h2>
+
+{% if error is defined and error %}
+<div class="banner banner-error">{{ error }}</div>
+{% endif %}
+
+{% if state.status.value == "completed" %}
+<div class="banner banner-success">
+    Last training completed successfully.
+    <a href="/models">View models &rarr;</a>
+</div>
+{% elif state.status.value == "failed" %}
+<div class="banner banner-error">
+    Last training failed{% if state.error %}: {{ state.error }}{% endif %}
+</div>
+{% elif state.status.value == "cancelled" %}
+<div class="banner banner-error">Last training was cancelled.</div>
+{% endif %}
+
+<form method="post" action="/start">
+    <label>
+        Wake Word
+        <input type="text" name="wake_word" placeholder="e.g. hey nanoclaw" required
+               value="{{ state.params.wake_word if state.params else '' }}">
+    </label>
+
+    <details>
+        <summary>Advanced Settings</summary>
+        <div class="grid">
+            <label>
+                Training Samples
+                <input type="number" name="n_samples"
+                       value="{{ state.params.n_samples if state.params else 10000 }}"
+                       min="100" max="100000">
+            </label>
+            <label>
+                Validation Samples
+                <input type="number" name="n_samples_val"
+                       value="{{ state.params.n_samples_val if state.params else 2000 }}"
+                       min="100" max="50000">
+            </label>
+        </div>
+        <div class="grid">
+            <label>
+                Training Steps
+                <input type="number" name="training_steps"
+                       value="{{ state.params.training_steps if state.params else 50000 }}"
+                       min="1000" max="500000">
+            </label>
+            <label>
+                Layer Size
+                <input type="number" name="layer_size"
+                       value="{{ state.params.layer_size if state.params else 32 }}"
+                       min="16" max="256">
+            </label>
+        </div>
+    </details>
+
+    <button type="submit">Start Training</button>
+</form>
+{% endblock %}

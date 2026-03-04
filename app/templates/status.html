@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Status — Wake Word Training{% endblock %}
+
+{% block content %}
+<h2>Training Status</h2>
+
+{% set step_labels = ["Download Datasets", "Generate Config", "Generate Clips", "Augment Clips", "Train Model"] %}
+
+<ol class="steps" id="steps">
+    {% for label in step_labels %}
+    <li class="{% if state.current_step > loop.index %}done{% elif state.current_step == loop.index %}active{% endif %}">
+        {{ label }}
+    </li>
+    {% endfor %}
+</ol>
+
+{% if state.params %}
+<dl class="param-grid">
+    <dt>Wake Word</dt>
+    <dd>{{ state.params.wake_word }}</dd>
+    <dt>Samples</dt>
+    <dd>{{ state.params.n_samples }} / {{ state.params.n_samples_val }} val</dd>
+    <dt>Steps</dt>
+    <dd>{{ state.params.training_steps }}</dd>
+    <dt>Layer Size</dt>
+    <dd>{{ state.params.layer_size }}</dd>
+</dl>
+{% endif %}
+
+<div id="status-banner"></div>
+
+<pre id="log-area"></pre>
+
+{% if state.status.value == "running" %}
+<form method="post" action="/cancel" style="margin-top: 1rem;">
+    <button type="submit" class="secondary outline"
+            onclick="return confirm('Cancel training?')">Cancel Training</button>
+</form>
+{% else %}
+<a href="/" role="button" style="margin-top: 1rem;">Configure New Training</a>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const logArea = document.getElementById('log-area');
+    const banner = document.getElementById('status-banner');
+    const steps = document.getElementById('steps');
+    let autoScroll = true;
+
+    // Track if user has scrolled up
+    logArea.addEventListener('scroll', () => {
+        const atBottom = logArea.scrollHeight - logArea.scrollTop - logArea.clientHeight < 50;
+        autoScroll = atBottom;
+    });
+
+    // SSE log streaming
+    const evtSource = new EventSource('/api/logs/stream');
+    evtSource.addEventListener('log', (e) => {
+        logArea.textContent += e.data + '\n';
+        if (autoScroll) {
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+    });
+    evtSource.onerror = () => {
+        // Will auto-reconnect
+    };
+
+    // Poll state for step updates
+    const stepLabels = ["Download Datasets", "Generate Config", "Generate Clips", "Augment Clips", "Train Model"];
+
+    function updateState(state) {
+        // Update step indicators
+        const lis = steps.querySelectorAll('li');
+        lis.forEach((li, i) => {
+            li.className = '';
+            if (state.current_step > i + 1) li.className = 'done';
+            else if (state.current_step === i + 1) li.className = 'active';
+        });
+
+        // Handle completion / failure
+        if (state.status === 'completed') {
+            banner.innerHTML = '<div class="banner banner-success">Training completed! <a href="/models">View models &rarr;</a></div>';
+            evtSource.close();
+        } else if (state.status === 'failed') {
+            banner.innerHTML = '<div class="banner banner-error">Training failed' +
+                (state.error ? ': ' + state.error : '') + '</div>';
+            evtSource.close();
+        } else if (state.status === 'cancelled') {
+            banner.innerHTML = '<div class="banner banner-error">Training cancelled.</div>';
+            evtSource.close();
+        }
+    }
+
+    setInterval(() => {
+        fetch('/api/state')
+            .then(r => r.json())
+            .then(updateState)
+            .catch(() => {});
+    }, 5000);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Models — Wake Word Training{% endblock %}
+
+{% block content %}
+<h2>Trained Models</h2>
+
+{% if models %}
+<table class="model-table">
+    <thead>
+        <tr>
+            <th>File</th>
+            <th>Size</th>
+            <th>Modified</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for model in models %}
+        <tr>
+            <td>{{ model.name }}</td>
+            <td>{{ model.size }}</td>
+            <td>{{ model.modified }}</td>
+            <td style="text-align: right">
+                <a href="/models/{{ model.name }}" role="button" class="outline secondary">
+                    Download
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No models found in output directory. Train a wake word first.</p>
+{% endif %}
+
+<a href="/" role="button" class="outline" style="margin-top: 1rem;">Configure Training</a>
+{% endblock %}
