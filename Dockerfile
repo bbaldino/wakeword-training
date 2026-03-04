@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir \
 # Clone piper-sample-generator and download TTS model
 RUN git clone https://github.com/dscripka/piper-sample-generator \
     && mkdir -p piper-sample-generator/models \
-    && wget -q -O piper-sample-generator/models/en_US-libritts_r-medium.pt \
+    && wget -q -O piper-sample-generator/models/en-us-libritts-high.pt \
        'https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt'
 
 # Install piper TTS dependencies
