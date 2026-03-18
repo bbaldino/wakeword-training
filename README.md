@@ -24,12 +24,12 @@ docker run --gpus all \
   wakeword-training
 ```
 
-After training, copy the `.tflite` (or `.onnx`) model from the output directory and load it in `voice_pipeline.py`:
+After training, copy the `.onnx` model from the output directory and load it in `orchestrator.py`:
 
 ```python
 oww = Model(
-    wakeword_models=["/path/to/hey_nanoclaw.tflite"],
-    inference_framework="tflite"
+    wakeword_models=["/path/to/hey_nanoclaw.onnx"],
+    inference_framework="onnx"
 )
 ```
 
