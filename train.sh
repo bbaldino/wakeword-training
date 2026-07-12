@@ -66,6 +66,13 @@ echo "=== Step 4/5: Augmenting clips ==="
 python openwakeword/train.py --training_config /app/config.yaml --augment_clips
 echo ""
 
+# ── Optional: pull the puck's flagged false wakes as hard negatives ──────────
+if [ -n "${ORCHESTRATOR_URL:-}" ]; then
+    echo "=== Pulling false-positive hard negatives from $ORCHESTRATOR_URL ==="
+    python /app/pull_negatives.py
+    echo ""
+fi
+
 # ── Step 5: Train model ─────────────────────────────────────────────────────
 echo "=== Step 5/5: Training model ==="
 python openwakeword/train.py --training_config /app/config.yaml --train_model --convert_to_tflite || {
