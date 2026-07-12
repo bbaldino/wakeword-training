@@ -34,7 +34,7 @@ async def index(request: Request):
     state = manager.state
     if state.status == TrainingStatus.RUNNING:
         return RedirectResponse("/status", status_code=303)
-    return templates.TemplateResponse("index.html", {
+    return templates.TemplateResponse(request, "index.html", {
         "request": request,
         "state": state,
     })
@@ -59,7 +59,7 @@ async def start_training(
     try:
         manager.start_training(params)
     except RuntimeError as e:
-        return templates.TemplateResponse("index.html", {
+        return templates.TemplateResponse(request, "index.html", {
             "request": request,
             "state": manager.state,
             "error": str(e),
@@ -69,7 +69,7 @@ async def start_training(
 
 @app.get("/status", response_class=HTMLResponse)
 async def status(request: Request):
-    return templates.TemplateResponse("status.html", {
+    return templates.TemplateResponse(request, "status.html", {
         "request": request,
         "state": manager.state,
     })
@@ -95,7 +95,7 @@ async def models_page(request: Request):
                         "%Y-%m-%d %H:%M"
                     ),
                 })
-    return templates.TemplateResponse("models.html", {
+    return templates.TemplateResponse(request, "models.html", {
         "request": request,
         "models": models,
     })
