@@ -74,8 +74,12 @@ if [ -n "${ORCHESTRATOR_URL:-}" ] && [ -n "${PULL_NEGATIVES:-}" ]; then
 fi
 
 # ── Step 5: Train model ─────────────────────────────────────────────────────
+# PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python works around the bundled
+# TensorFlow's stale _pb2 files being rejected by protobuf>=3.20's C++ runtime
+# (only matters for the ONNX→TFLite conversion; the puck uses the ONNX directly).
 echo "=== Step 5/5: Training model ==="
-python openwakeword/train.py --training_config /app/config.yaml --train_model --convert_to_tflite || {
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python \
+    python openwakeword/train.py --training_config /app/config.yaml --train_model --convert_to_tflite || {
     echo "  NOTE: train.py exited with an error (likely TFLite conversion failure)."
     echo "  Checking if the ONNX model was still produced..."
 }
