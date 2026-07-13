@@ -88,6 +88,10 @@
                    {% if negatives and negatives.count %}checked{% endif %}>
             Include flagged false positives as hard negatives
         </label>
+        <label>
+            <input type="checkbox" name="push_model" value="true">
+            Deploy the trained model to the puck when done
+        </label>
     </div>
 
     <button type="submit">Start Training</button>

@@ -102,13 +102,11 @@ class TrainingManager:
         env["TRAINING_STEPS"] = str(params.training_steps)
         env["LAYER_SIZE"] = str(params.layer_size)
         env["PYTHONUNBUFFERED"] = "1"
-        # Per-run control of the hard-negatives pull (train.sh gates on this).
-        if params.include_negatives:
-            env["ORCHESTRATOR_URL"] = params.orchestrator_url or os.environ.get(
-                "ORCHESTRATOR_URL", ""
-            )
-        else:
-            env["ORCHESTRATOR_URL"] = ""
+        # Per-run control of the puck integration (train.sh gates each step).
+        url = params.orchestrator_url or os.environ.get("ORCHESTRATOR_URL", "")
+        env["ORCHESTRATOR_URL"] = url if (params.include_negatives or params.push_model) else ""
+        env["PULL_NEGATIVES"] = "1" if params.include_negatives else ""
+        env["PUSH_MODEL"] = "1" if params.push_model else ""
 
         self._process = subprocess.Popen(
             ["/app/train.sh"],

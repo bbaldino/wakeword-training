@@ -66,6 +66,7 @@ async def start_training(
     layer_size: int = Form(32),
     orchestrator_url: str = Form(""),
     include_negatives: bool = Form(False),
+    push_model: bool = Form(False),
 ):
     params = TrainingParams(
         wake_word=wake_word,
@@ -75,6 +76,7 @@ async def start_training(
         layer_size=layer_size,
         orchestrator_url=orchestrator_url,
         include_negatives=include_negatives,
+        push_model=push_model,
     )
     try:
         manager.start_training(params)

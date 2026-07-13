@@ -67,7 +67,7 @@ python openwakeword/train.py --training_config /app/config.yaml --augment_clips
 echo ""
 
 # ── Optional: pull the puck's flagged false wakes as hard negatives ──────────
-if [ -n "${ORCHESTRATOR_URL:-}" ]; then
+if [ -n "${ORCHESTRATOR_URL:-}" ] && [ -n "${PULL_NEGATIVES:-}" ]; then
     echo "=== Pulling false-positive hard negatives from $ORCHESTRATOR_URL ==="
     python /app/pull_negatives.py
     echo ""
@@ -100,6 +100,22 @@ else
     echo "  WARNING: $MODEL_NAME.tflite not found (ONNX model is still usable)"
     echo "  TFLite conversion can fail due to tensorflow version constraints."
     echo "  You can convert manually later if needed."
+fi
+
+# ── Optional: deploy the new model to the orchestrator (hot-reloads on the puck) ─
+if [ -n "${ORCHESTRATOR_URL:-}" ] && [ -n "${PUSH_MODEL:-}" ]; then
+    ONNX="/output/${MODEL_NAME}.onnx"
+    if [ -f "$ONNX" ]; then
+        echo "=== Deploying $MODEL_NAME.onnx to $ORCHESTRATOR_URL ==="
+        curl -sf -X POST "${ORCHESTRATOR_URL}/models/${MODEL_NAME}" \
+            ${MODEL_PUSH_TOKEN:+-H "X-Auth-Token: ${MODEL_PUSH_TOKEN}"} \
+            --data-binary "@${ONNX}" -w "\n" \
+            && echo "  Deployed and hot-reloaded on the puck." \
+            || echo "  Deploy failed (model still saved in /output/)."
+    else
+        echo "  Skipping deploy: $ONNX not found."
+    fi
+    echo ""
 fi
 
 echo ""
