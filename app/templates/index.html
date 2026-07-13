@@ -60,6 +60,36 @@
         </div>
     </details>
 
+    <div style="margin-top:1rem;padding:.75rem;border:1px solid #888;border-radius:8px">
+        <strong>Hard negatives from the puck</strong>
+        {% if negatives and negatives.url %}
+            {% if negatives.reachable %}
+                <p style="margin:.3rem 0">
+                    <strong>{{ negatives.count }}</strong> flagged false positive(s) available at
+                    <code>{{ negatives.url }}</code> — checking the box folds them into training.
+                </p>
+            {% else %}
+                <p style="margin:.3rem 0;color:#c00">
+                    Orchestrator at <code>{{ negatives.url }}</code> is unreachable.
+                </p>
+            {% endif %}
+        {% else %}
+            <p style="margin:.3rem 0">
+                Enter the puck's URL to pull its flagged false positives as hard negatives.
+            </p>
+        {% endif %}
+        <label>
+            Orchestrator URL
+            <input type="text" name="orchestrator_url" placeholder="http://192.168.1.145:8100"
+                   value="{{ negatives.url if negatives else '' }}">
+        </label>
+        <label>
+            <input type="checkbox" name="include_negatives" value="true"
+                   {% if negatives and negatives.count %}checked{% endif %}>
+            Include flagged false positives as hard negatives
+        </label>
+    </div>
+
     <button type="submit">Start Training</button>
 </form>
 {% endblock %}

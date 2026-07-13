@@ -21,6 +21,8 @@ class TrainingParams(BaseModel):
     n_samples_val: int = Field(2000, ge=100, le=50000)
     training_steps: int = Field(50000, ge=1000, le=500000)
     layer_size: int = Field(32, ge=16, le=256)
+    orchestrator_url: str = Field("", description="Orchestrator base URL for hard negatives")
+    include_negatives: bool = Field(False, description="Pull flagged false positives as negatives")
 
 
 class TrainingState(BaseModel):

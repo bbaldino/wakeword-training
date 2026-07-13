@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +28,19 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+def _negatives_info() -> dict:
+    """Best-effort count of flagged false positives available at the orchestrator."""
+    url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
+    if not url:
+        return {"url": "", "count": None, "reachable": False}
+    try:
+        data = urllib.request.urlopen(f"{url}/events?label=false", timeout=4).read()
+        n = len(json.loads(data).get("events", []))
+        return {"url": url, "count": n, "reachable": True}
+    except Exception:
+        return {"url": url, "count": None, "reachable": False}
+
+
 # ── Pages ────────────────────────────────────────────────────────────────────
 
 
@@ -37,6 +52,7 @@ async def index(request: Request):
     return templates.TemplateResponse(request, "index.html", {
         "request": request,
         "state": state,
+        "negatives": _negatives_info(),
     })
 
 
@@ -48,6 +64,8 @@ async def start_training(
     n_samples_val: int = Form(2000),
     training_steps: int = Form(50000),
     layer_size: int = Form(32),
+    orchestrator_url: str = Form(""),
+    include_negatives: bool = Form(False),
 ):
     params = TrainingParams(
         wake_word=wake_word,
@@ -55,6 +73,8 @@ async def start_training(
         n_samples_val=n_samples_val,
         training_steps=training_steps,
         layer_size=layer_size,
+        orchestrator_url=orchestrator_url,
+        include_negatives=include_negatives,
     )
     try:
         manager.start_training(params)
@@ -63,6 +83,7 @@ async def start_training(
             "request": request,
             "state": manager.state,
             "error": str(e),
+            "negatives": _negatives_info(),
         }, status_code=409)
     return RedirectResponse("/status", status_code=303)
 
