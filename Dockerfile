@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -15,9 +15,9 @@ WORKDIR /app
 # Pin numpy<2 early — many dependencies (pyarrow, tensorflow, speechbrain) are incompatible with numpy 2.x
 RUN pip install --no-cache-dir "numpy<2"
 
-# Install PyTorch with CUDA 12.1 support first (before anything else pulls in CPU-only torch)
+# Install PyTorch with CUDA 12.4 support first (before anything else pulls in CPU-only torch)
 RUN pip install --no-cache-dir \
-    torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+    torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 # Clone piper-sample-generator and download TTS model
 RUN git clone https://github.com/dscripka/piper-sample-generator \
