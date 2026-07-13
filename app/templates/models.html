@@ -4,6 +4,12 @@
 {% block content %}
 <h2>Trained Models</h2>
 
+{% if deploy_msg %}
+<div class="banner {% if 'Deployed' in deploy_msg %}banner-success{% else %}banner-error{% endif %}">
+    {{ deploy_msg }}
+</div>
+{% endif %}
+
 {% if models %}
 <table class="model-table">
     <thead>
@@ -20,10 +26,16 @@
             <td>{{ model.name }}</td>
             <td>{{ model.size }}</td>
             <td>{{ model.modified }}</td>
-            <td style="text-align: right">
+            <td style="text-align: right; white-space: nowrap">
                 <a href="/models/{{ model.name }}" role="button" class="outline secondary">
                     Download
                 </a>
+                {% if model.name.endswith('.onnx') %}
+                <form method="post" action="/models/{{ model.name }}/deploy"
+                      style="display:inline" onsubmit="this.querySelector('button').setAttribute('aria-busy','true')">
+                    <button type="submit" class="outline">Deploy to puck</button>
+                </form>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

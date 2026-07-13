@@ -104,8 +104,7 @@ async def cancel_training():
     return RedirectResponse("/status", status_code=303)
 
 
-@app.get("/models", response_class=HTMLResponse)
-async def models_page(request: Request):
+def _list_output_models():
     models = []
     if OUTPUT_DIR.exists():
         for f in sorted(OUTPUT_DIR.iterdir()):
@@ -118,9 +117,46 @@ async def models_page(request: Request):
                         "%Y-%m-%d %H:%M"
                     ),
                 })
+    return models
+
+
+@app.get("/models", response_class=HTMLResponse)
+async def models_page(request: Request):
     return templates.TemplateResponse(request, "models.html", {
         "request": request,
-        "models": models,
+        "models": _list_output_models(),
+    })
+
+
+@app.post("/models/{filename}/deploy", response_class=HTMLResponse)
+async def deploy_model(request: Request, filename: str):
+    """Push an already-trained model to the orchestrator (post-hoc deploy)."""
+    onnx = OUTPUT_DIR / filename
+    url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
+    if (not filename.endswith(".onnx") or not onnx.exists()
+            or onnx.resolve().parent != OUTPUT_DIR.resolve()):
+        msg = f"Cannot deploy {filename}."
+    elif not url:
+        msg = "ORCHESTRATOR_URL is not set on this container; can't deploy."
+    else:
+        req = urllib.request.Request(
+            f"{url}/models/{filename[:-5]}",
+            data=onnx.read_bytes(),
+            method="POST",
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        token = os.environ.get("MODEL_PUSH_TOKEN", "")
+        if token:
+            req.add_header("X-Auth-Token", token)
+        try:
+            urllib.request.urlopen(req, timeout=30)
+            msg = f"Deployed {filename} to {url} — hot-reloaded on the puck."
+        except Exception as e:
+            msg = f"Deploy failed: {e}"
+    return templates.TemplateResponse(request, "models.html", {
+        "request": request,
+        "models": _list_output_models(),
+        "deploy_msg": msg,
     })
 
 
