@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import urllib.request
@@ -104,6 +105,10 @@ async def cancel_training():
     return RedirectResponse("/status", status_code=303)
 
 
+def _sha12(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+
+
 def _list_output_models():
     models = []
     if OUTPUT_DIR.exists():
@@ -116,16 +121,36 @@ def _list_output_models():
                     "modified": datetime.fromtimestamp(stat.st_mtime).strftime(
                         "%Y-%m-%d %H:%M"
                     ),
+                    "sha256": _sha12(f) if f.suffix == ".onnx" else None,
                 })
     return models
 
 
+def _puck_models() -> dict:
+    """Best-effort snapshot of what's currently deployed on the puck."""
+    url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
+    if not url:
+        return {"url": "", "reachable": False, "models": []}
+    try:
+        data = urllib.request.urlopen(f"{url}/models", timeout=4).read()
+        return {"url": url, "reachable": True,
+                "models": json.loads(data).get("models", [])}
+    except Exception:
+        return {"url": url, "reachable": False, "models": []}
+
+
+def _models_context(request: Request, message: dict | None = None) -> dict:
+    models = _list_output_models()
+    puck = _puck_models()
+    live = {m.get("sha256") for m in puck["models"] if m.get("sha256")}
+    for m in models:
+        m["live"] = bool(m.get("sha256")) and m["sha256"] in live
+    return {"request": request, "models": models, "puck": puck, "message": message}
+
+
 @app.get("/models", response_class=HTMLResponse)
 async def models_page(request: Request):
-    return templates.TemplateResponse(request, "models.html", {
-        "request": request,
-        "models": _list_output_models(),
-    })
+    return templates.TemplateResponse(request, "models.html", _models_context(request))
 
 
 @app.post("/models/{filename}/deploy", response_class=HTMLResponse)
@@ -135,9 +160,9 @@ async def deploy_model(request: Request, filename: str):
     url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
     if (not filename.endswith(".onnx") or not onnx.exists()
             or onnx.resolve().parent != OUTPUT_DIR.resolve()):
-        msg = f"Cannot deploy {filename}."
+        message = {"ok": False, "text": f"Cannot deploy {filename}."}
     elif not url:
-        msg = "ORCHESTRATOR_URL is not set on this container; can't deploy."
+        message = {"ok": False, "text": "ORCHESTRATOR_URL is not set on this container."}
     else:
         req = urllib.request.Request(
             f"{url}/models/{filename[:-5]}",
@@ -149,15 +174,34 @@ async def deploy_model(request: Request, filename: str):
         if token:
             req.add_header("X-Auth-Token", token)
         try:
-            urllib.request.urlopen(req, timeout=30)
-            msg = f"Deployed {filename} to {url} — hot-reloaded on the puck."
+            urllib.request.urlopen(req, timeout=30).read()
+            message = {"ok": True,
+                       "text": f"Deployed {filename} to {url} — hot-reloaded on the puck."}
         except Exception as e:
-            msg = f"Deploy failed: {e}"
-    return templates.TemplateResponse(request, "models.html", {
-        "request": request,
-        "models": _list_output_models(),
-        "deploy_msg": msg,
-    })
+            message = {"ok": False, "text": f"Deploy failed: {e}"}
+    return templates.TemplateResponse(request, "models.html", _models_context(request, message))
+
+
+@app.post("/puck/models/{name}/rollback", response_class=HTMLResponse)
+async def rollback_model(request: Request, name: str):
+    """Ask the orchestrator to restore the backed-up model for {name}."""
+    url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
+    if not url:
+        message = {"ok": False, "text": "ORCHESTRATOR_URL is not set on this container."}
+    else:
+        req = urllib.request.Request(
+            f"{url}/models/{name}/rollback", data=b"", method="POST"
+        )
+        token = os.environ.get("MODEL_PUSH_TOKEN", "")
+        if token:
+            req.add_header("X-Auth-Token", token)
+        try:
+            urllib.request.urlopen(req, timeout=30).read()
+            message = {"ok": True,
+                       "text": f"Rolled back '{name}' on the puck — hot-reloaded."}
+        except Exception as e:
+            message = {"ok": False, "text": f"Rollback failed: {e}"}
+    return templates.TemplateResponse(request, "models.html", _models_context(request, message))
 
 
 @app.get("/models/{filename}")

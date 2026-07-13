@@ -4,17 +4,62 @@
 {% block content %}
 <h2>Trained Models</h2>
 
-{% if deploy_msg %}
-<div class="banner {% if 'Deployed' in deploy_msg %}banner-success{% else %}banner-error{% endif %}">
-    {{ deploy_msg }}
+{% if message %}
+<div class="banner {{ 'banner-success' if message.ok else 'banner-error' }}">
+    {{ message.text }}
 </div>
 {% endif %}
 
+<h3>Deployed on the puck</h3>
+{% if not puck.url %}
+<p>Set <code>ORCHESTRATOR_URL</code> on this container to see and manage what's live on the puck.</p>
+{% elif not puck.reachable %}
+<div class="banner banner-error">Puck at <code>{{ puck.url }}</code> is unreachable.</div>
+{% else %}
+<table class="model-table">
+    <thead>
+        <tr>
+            <th>Model</th>
+            <th>Version</th>
+            <th>Updated</th>
+            <th>Backup</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for m in puck.models %}
+        <tr>
+            <td>{{ m.name }}</td>
+            <td>{% if m.sha256 %}<code>{{ m.sha256 }}</code>{% else %}<em>missing</em>{% endif %}</td>
+            <td>{{ m.modified or "—" }}</td>
+            <td>
+                {% if m.backup %}
+                    <code>{{ m.backup.sha256 }}</code><br>
+                    <small>{{ m.backup.modified }}</small>
+                {% else %}—{% endif %}
+            </td>
+            <td style="text-align: right">
+                {% if m.has_backup %}
+                <form method="post" action="/puck/models/{{ m.name }}/rollback"
+                      style="display:inline"
+                      onsubmit="this.querySelector('button').setAttribute('aria-busy','true')">
+                    <button type="submit" class="outline contrast">Roll back</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<h3 style="margin-top: 1.5rem">Trained output</h3>
 {% if models %}
 <table class="model-table">
     <thead>
         <tr>
             <th>File</th>
+            <th>Version</th>
             <th>Size</th>
             <th>Modified</th>
             <th></th>
@@ -23,7 +68,13 @@
     <tbody>
         {% for model in models %}
         <tr>
-            <td>{{ model.name }}</td>
+            <td>
+                {{ model.name }}
+                {% if model.live %}
+                <mark style="font-size:.75rem">live on puck</mark>
+                {% endif %}
+            </td>
+            <td>{% if model.sha256 %}<code>{{ model.sha256 }}</code>{% else %}—{% endif %}</td>
             <td>{{ model.size }}</td>
             <td>{{ model.modified }}</td>
             <td style="text-align: right; white-space: nowrap">
@@ -32,7 +83,8 @@
                 </a>
                 {% if model.name.endswith('.onnx') %}
                 <form method="post" action="/models/{{ model.name }}/deploy"
-                      style="display:inline" onsubmit="this.querySelector('button').setAttribute('aria-busy','true')">
+                      style="display:inline"
+                      onsubmit="this.querySelector('button').setAttribute('aria-busy','true')">
                     <button type="submit" class="outline">Deploy to puck</button>
                 </form>
                 {% endif %}
