@@ -1,5 +1,8 @@
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-jinja2>=3.1.0
-python-multipart>=0.0.6
-sse-starlette>=1.6.0
+# Web-app deps. Upper bounds are pinned so a rebuild can't silently pull a
+# breaking major/minor (e.g. the Starlette TemplateResponse signature change
+# that broke every page). Patch updates within each line are still allowed.
+fastapi>=0.115,<0.120
+uvicorn[standard]>=0.30,<0.35
+jinja2>=3.1,<4
+python-multipart>=0.0.6,<0.1
+sse-starlette>=1.6,<3
