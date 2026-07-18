@@ -106,6 +106,16 @@ else
     echo "  You can convert manually later if needed."
 fi
 
+# ── Evaluate the candidate against the currently-deployed model (advisory) ───
+# Held-out false wakes + confirmed-real wakes the model never trained on, so the
+# numbers reflect generalization. Report-only: never blocks the deploy below.
+if [ -n "${ORCHESTRATOR_URL:-}" ]; then
+    echo "=== Evaluating candidate vs. deployed model ==="
+    MODEL_NAME="$MODEL_NAME" OUTPUT_DIR="/output" TRAINING_OUTPUT_DIR="$OUTPUT_DIR" \
+        python /app/evaluate.py || echo "  (evaluation skipped/failed; continuing)"
+    echo ""
+fi
+
 # ── Optional: deploy the new model to the orchestrator (hot-reloads on the puck) ─
 if [ -n "${ORCHESTRATOR_URL:-}" ] && [ -n "${PUSH_MODEL:-}" ]; then
     ONNX="/output/${MODEL_NAME}.onnx"

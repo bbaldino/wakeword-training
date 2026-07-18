@@ -90,6 +90,26 @@
                 {% endif %}
             </td>
         </tr>
+        {% if model.eval %}
+        <tr>
+            <td colspan="5" style="font-size:.82rem; padding:.35rem 1rem; opacity:.85">
+                {% set e = model.eval %}
+                <strong>Last eval</strong>
+                <small>({{ e.generated_at }}, thr {{ e.threshold }})</small> —
+                {% if 'REGRESSION' in e.verdict %}
+                <mark style="background:#7a1f1f;color:#fff">{{ e.verdict }}</mark>
+                {% elif 'BETTER' in e.verdict %}
+                <mark style="background:#1f5a2a;color:#fff">{{ e.verdict }}</mark>
+                {% else %}{{ e.verdict }}{% endif %}
+                <br>
+                candidate <code>{{ e.candidate.false_accepts }}</code> false-accepts,
+                <code>{{ e.candidate.misses }}</code> misses{% if e.current %};
+                current <code>{{ e.current.false_accepts }}</code> / <code>{{ e.current.misses }}</code>{% endif %}
+                <small>(test sets: {{ e.sets.held_out_false }} held-out false,
+                {{ e.sets.real_positive }} real, {{ e.sets.synthetic_positive }} synthetic)</small>
+            </td>
+        </tr>
+        {% endif %}
         {% endfor %}
     </tbody>
 </table>

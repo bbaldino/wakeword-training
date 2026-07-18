@@ -72,7 +72,7 @@ RUN mkdir -p /app/openwakeword/openwakeword/resources/models \
        https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/melspectrogram.tflite
 
 # Copy training scripts and config
-COPY download_data.py train.sh config.template.yml pull_negatives.py /app/
+COPY download_data.py train.sh config.template.yml pull_negatives.py evaluate.py eval_split.py /app/
 RUN chmod +x /app/train.sh
 
 # Install web UI dependencies

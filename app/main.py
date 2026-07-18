@@ -109,6 +109,16 @@ def _sha12(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 
+def _read_eval(stem: str):
+    p = OUTPUT_DIR / f"{stem}.eval.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except Exception:
+        return None
+
+
 def _list_output_models():
     models = []
     if OUTPUT_DIR.exists():
@@ -122,6 +132,7 @@ def _list_output_models():
                         "%Y-%m-%d %H:%M"
                     ),
                     "sha256": _sha12(f) if f.suffix == ".onnx" else None,
+                    "eval": _read_eval(f.stem) if f.suffix == ".onnx" else None,
                 })
     return models
 

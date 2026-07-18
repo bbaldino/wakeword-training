@@ -27,6 +27,8 @@ import numpy as np
 import yaml
 from openwakeword.utils import AudioFeatures
 
+from eval_split import is_eval_clip
+
 RATE = 16000
 ORCH = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
 OUT = os.environ.get("NEG_OUTPUT", "/data/custom_negatives.npy")
@@ -40,14 +42,23 @@ def fetch_clips() -> np.ndarray:
     print(f"Pulling false clips from {url}")
     data = urllib.request.urlopen(url, timeout=30).read()
     clips = []
+    held_out = 0
     with tarfile.open(fileobj=io.BytesIO(data)) as tar:
         for m in tar.getmembers():
             if not m.name.endswith(".wav"):
+                continue
+            # Reserve the held-out eval slice so evaluate.py measures
+            # generalization, not clips the model was trained on.
+            clip_id = m.name.rsplit("/", 1)[-1][: -len(".wav")]
+            if is_eval_clip(clip_id):
+                held_out += 1
                 continue
             with wave.open(tar.extractfile(m)) as w:
                 a = np.frombuffer(w.readframes(w.getnframes()), np.int16)
             a = a[:CLIP_LEN] if len(a) >= CLIP_LEN else np.pad(a, (0, CLIP_LEN - len(a)))
             clips.append(a)
+    if held_out:
+        print(f"Held out {held_out} clip(s) for evaluation (not used for training)")
     return np.stack(clips).astype(np.int16) if clips else np.empty((0, CLIP_LEN), np.int16)
 
 

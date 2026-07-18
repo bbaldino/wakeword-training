@@ -103,8 +103,10 @@ class TrainingManager:
         env["LAYER_SIZE"] = str(params.layer_size)
         env["PYTHONUNBUFFERED"] = "1"
         # Per-run control of the puck integration (train.sh gates each step).
+        # Always pass the URL so the (read-only, advisory) evaluation step can
+        # run; pulling negatives and pushing the model stay individually gated.
         url = params.orchestrator_url or os.environ.get("ORCHESTRATOR_URL", "")
-        env["ORCHESTRATOR_URL"] = url if (params.include_negatives or params.push_model) else ""
+        env["ORCHESTRATOR_URL"] = url
         env["PULL_NEGATIVES"] = "1" if params.include_negatives else ""
         env["PUSH_MODEL"] = "1" if params.push_model else ""
 
