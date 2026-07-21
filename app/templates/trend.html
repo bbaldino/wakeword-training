@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}FP Trend · Wake Word Training{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>False positives by model version</h2>
+  <p>Real-world wake events from the puck, grouped by the model build (<code>model_sha</code>)
+     that fired them. Each new build should push the false rate down.</p>
+</hgroup>
+
+{% if not puck.reachable %}
+  <article>
+    Couldn't reach the puck at <code>{{ puck.url or "ORCHESTRATOR_URL (unset)" }}</code>.
+    Make sure the orchestrator is running and <code>ORCHESTRATOR_URL</code> is set.
+  </article>
+{% elif not rows %}
+  <article>No wake events collected yet — say the wake word (or wait for a false trigger) and check back.</article>
+{% else %}
+  <figure>
+    <table>
+      <thead>
+        <tr>
+          <th>model</th>
+          <th>version</th>
+          <th>window</th>
+          <th>days</th>
+          <th>false</th>
+          <th>real</th>
+          <th>pending</th>
+          <th>false / day</th>
+          <th>false of reviewed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.model }}</td>
+          <td>
+            <code>{{ r.sha }}</code>
+            {% if r.live %}<mark>live</mark>{% endif %}
+          </td>
+          <td>
+            {% if r.first %}{{ r.first[:10] }}{% endif %}
+            {% if r.last and r.last[:10] != r.first[:10] %} → {{ r.last[:10] }}{% endif %}
+          </td>
+          <td>{% if r.days is not none %}{{ "%.1f"|format(r.days) }}{% else %}–{% endif %}</td>
+          <td><strong>{{ r.false }}</strong></td>
+          <td>{{ r.real }}</td>
+          <td>{{ r.unlabeled }}</td>
+          <td>{% if r.false_per_day is not none %}{{ "%.1f"|format(r.false_per_day) }}{% else %}–{% endif %}</td>
+          <td>{% if r.false_frac is not none %}{{ "%.0f"|format(r.false_frac * 100) }}%{% else %}–{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </figure>
+
+  <small>
+    <strong>false of reviewed</strong> = false ÷ (false + real) — comparable across versions
+    regardless of how long each ran; lower is better.
+    <strong>false / day</strong> is the lived frequency but depends on usage and how long the build
+    was deployed (shown only when the window is ≥ ½ day).
+    <strong>pending</strong> = unlabeled events — review them in the puck's wake-event UI so they
+    count toward false/real.
+    <code>untagged</code> rows are events collected before per-version tagging was added.
+  </small>
+{% endif %}
+{% endblock %}

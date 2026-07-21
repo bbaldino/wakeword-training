@@ -164,6 +164,66 @@ async def models_page(request: Request):
     return templates.TemplateResponse(request, "models.html", _models_context(request))
 
 
+def _puck_events() -> dict:
+    """All collected wake events from the puck (each tagged with model_sha + ts)."""
+    url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
+    if not url:
+        return {"url": "", "reachable": False, "events": []}
+    try:
+        data = urllib.request.urlopen(f"{url}/events", timeout=8).read()
+        d = json.loads(data)
+        return {"url": url, "reachable": bool(d.get("enabled", True)),
+                "events": d.get("events", [])}
+    except Exception:
+        return {"url": url, "reachable": False, "events": []}
+
+
+def _fp_trend() -> dict:
+    """Group wake events by the model version (`model_sha`) that fired them, so
+    the real-world false-positive rate can be compared across builds over time."""
+    puck = _puck_events()
+    live = {m.get("sha256") for m in _puck_models()["models"] if m.get("sha256")}
+    groups: dict[tuple, dict] = {}
+    for e in puck["events"]:
+        key = (e.get("model", "?"), e.get("model_sha") or "untagged")
+        g = groups.setdefault(key, {
+            "model": key[0], "sha": key[1],
+            "total": 0, "false": 0, "real": 0, "unlabeled": 0,
+            "first": None, "last": None,
+        })
+        g["total"] += 1
+        lab = e.get("label", "unlabeled")
+        g[lab if lab in ("false", "real") else "unlabeled"] += 1
+        ts = e.get("ts") or ""
+        if ts:
+            g["first"] = ts if g["first"] is None else min(g["first"], ts)
+            g["last"] = ts if g["last"] is None else max(g["last"], ts)
+    rows = []
+    for g in groups.values():
+        days = None
+        if g["first"] and g["last"]:
+            try:
+                span = datetime.fromisoformat(g["last"]) - datetime.fromisoformat(g["first"])
+                days = span.total_seconds() / 86400.0
+            except Exception:
+                days = None
+        reviewed = g["false"] + g["real"]
+        g["days"] = days
+        g["false_frac"] = (g["false"] / reviewed) if reviewed else None
+        g["false_per_day"] = (g["false"] / days) if days and days >= 0.5 else None
+        g["live"] = g["sha"] in live
+        rows.append(g)
+    rows.sort(key=lambda r: (r["first"] or ""))
+    return {"puck": puck, "rows": rows}
+
+
+@app.get("/trend", response_class=HTMLResponse)
+async def trend_page(request: Request):
+    ctx = _fp_trend()
+    ctx["request"] = request
+    return templates.TemplateResponse(request, "trend.html", ctx)
+
+
 @app.post("/models/{filename}/deploy", response_class=HTMLResponse)
 async def deploy_model(request: Request, filename: str):
     """Push an already-trained model to the orchestrator (post-hoc deploy)."""
