@@ -19,6 +19,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
+from eval_split import is_eval_clip
+from puck_clips import PuckTooOld, list_events, model_name
+
 from .models import TrainingParams, TrainingStatus
 from .training import OUTPUT_DIR, manager
 
@@ -30,16 +33,9 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
 def _negatives_info() -> dict:
-    """Best-effort count of flagged false positives available at the orchestrator."""
-    url = os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")
-    if not url:
-        return {"url": "", "count": None, "reachable": False}
-    try:
-        data = urllib.request.urlopen(f"{url}/events?label=false", timeout=4).read()
-        n = len(json.loads(data).get("events", []))
-        return {"url": url, "count": n, "reachable": True}
-    except Exception:
-        return {"url": url, "count": None, "reachable": False}
+    """The container's default orchestrator URL (pre-fills the form). Reachability
+    and the per-wake-word clip counts come from /api/clips as the form is edited."""
+    return {"url": os.environ.get("ORCHESTRATOR_URL", "").rstrip("/")}
 
 
 # ── Pages ────────────────────────────────────────────────────────────────────
@@ -287,6 +283,43 @@ async def download_model(filename: str):
 
 
 # ── API ──────────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/clips")
+def api_clips(wake_word: str = "", url: str = ""):
+    """The puck clips a training run for `wake_word` would use: positives (the word
+    was said; evaluation only) and negatives (reviewed, the word was not said;
+    training except the held-out eval slice). Same selection as pull_negatives.py
+    and evaluate.py, via puck_clips. Plain `def`: FastAPI runs it in a thread, so
+    the blocking puck requests don't stall the event loop."""
+    url = (url or os.environ.get("ORCHESTRATOR_URL", "")).strip().rstrip("/")
+    name = model_name(wake_word)
+    if not url:
+        return {"ok": False, "error": "No orchestrator URL set."}
+    if not name:
+        return {"ok": False, "url": url, "error": "Enter a wake word."}
+    try:
+        positives = list_events(url, said=name)
+        negatives = list_events(url, not_said=name)
+        puck = json.loads(urllib.request.urlopen(f"{url}/models", timeout=4).read())
+    except PuckTooOld as e:
+        return {"ok": False, "url": url, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "url": url, "error": f"Orchestrator at {url} is unreachable ({e})."}
+
+    def row(e: dict) -> dict:
+        return {
+            "id": e["id"], "ts": e.get("ts"), "fired": e.get("model"), "said": e.get("said"),
+            "score": e.get("score"), "near_miss": bool(e.get("near_miss")),
+            "eval": is_eval_clip(e["id"]), "audio": f"{url}/events/{e['id']}/audio",
+        }
+
+    return {
+        "ok": True, "url": url, "model": name,
+        "puck_models": [m.get("name") for m in puck.get("models", [])],
+        "positives": [row(e) for e in positives],
+        "negatives": [row(e) for e in negatives],
+    }
 
 
 @app.get("/api/state")

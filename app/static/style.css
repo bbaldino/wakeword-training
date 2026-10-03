@@ -86,3 +86,11 @@
 .model-table td:last-child {
     text-align: right;
 }
+
+/* Puck clip panel (Configure page) */
+#clips .muted, p.muted { color: var(--pico-muted-color); }
+#clips .error { color: var(--pico-del-color, #c00); }
+#clips .overflow-auto { overflow-x: auto; max-height: 24rem; overflow-y: auto; }
+#clips table { font-size: 0.85rem; margin-bottom: 0.5rem; }
+#clips td, #clips th { padding: 0.25rem 0.5rem; white-space: nowrap; }
+#clips button.play { padding: 0.1rem 0.5rem; margin: 0; width: auto; }

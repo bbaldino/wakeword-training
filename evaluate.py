@@ -3,10 +3,12 @@
 Scores a just-trained candidate model against the model currently deployed on
 the puck, using data neither was allowed to train on:
 
-  * held-out false wakes  (the eval slice of collected false clips) -> false
+  * held-out negatives    (the eval slice of reviewed clips where this wake word
+    was NOT said)                                                    -> false
     accepts. This is the direct measure of whether feeding negatives helps: does
     the new model stop firing on adversarial clips it never saw in training?
-  * confirmed real wakes  (label=real, from the puck)               -> misses
+  * confirmed real wakes  (clips where this wake word WAS said)    -> misses
+  (Selected by what was said, not the puck's per-model `label` — see puck_clips.py.)
   * synthetic positives   (openWakeWord's own held-out test split)  -> misses
     (best effort; a quick baseline before real clips accumulate)
 
@@ -24,13 +26,10 @@ Env:
                      (default "*positive*test*.npy,*positive*val*.npy")
 """
 import glob
-import io
 import json
 import os
 import sys
-import tarfile
 import urllib.request
-import wave
 from datetime import datetime
 
 import numpy as np
@@ -38,6 +37,7 @@ import onnxruntime as ort
 from openwakeword.utils import AudioFeatures
 
 from eval_split import is_eval_clip
+from puck_clips import fetch_clips as fetch_puck_clips
 
 RATE = 16000
 CLIP_LEN = int(float(os.environ.get("NEG_CLIP_SECS", "2.0")) * RATE)
@@ -65,30 +65,19 @@ def featurizer() -> AudioFeatures:
     return _feats
 
 
-def fetch_clips(label: str, eval_only: bool) -> np.ndarray:
-    """Pull labelled clips from the puck as (N, CLIP_LEN) int16.
+def fetch_clips(eval_only: bool, **query: str) -> np.ndarray:
+    """Pull this model's clips from the puck as (N, CLIP_LEN) int16, e.g.
+    said=NAME (positives) or not_said=NAME (negatives).
 
     eval_only keeps just the held-out slice (for negatives the model trained on
     the rest); real positives are never trained on, so we take them all.
     """
-    url = f"{ORCH}/events/export?label={label}"
     try:
-        data = urllib.request.urlopen(url, timeout=30).read()
+        pairs = fetch_puck_clips(ORCH, CLIP_LEN, **query)
     except Exception as e:
-        print(f"  ({label}) fetch failed: {e}")
+        print(f"  ({query}) fetch failed: {e}")
         return np.empty((0, CLIP_LEN), np.int16)
-    clips = []
-    with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-        for m in tar.getmembers():
-            if not m.name.endswith(".wav"):
-                continue
-            clip_id = m.name.rsplit("/", 1)[-1][: -len(".wav")]
-            if eval_only and not is_eval_clip(clip_id):
-                continue
-            with wave.open(tar.extractfile(m)) as w:
-                a = np.frombuffer(w.readframes(w.getnframes()), np.int16)
-            a = a[:CLIP_LEN] if len(a) >= CLIP_LEN else np.pad(a, (0, CLIP_LEN - len(a)))
-            clips.append(a)
+    clips = [a for clip_id, a in pairs if not eval_only or is_eval_clip(clip_id)]
     return np.stack(clips).astype(np.int16) if clips else np.empty((0, CLIP_LEN), np.int16)
 
 
@@ -176,12 +165,12 @@ def main() -> None:
         return
 
     print("=== Building held-out evaluation sets ===")
-    neg = embed(fetch_clips("false", eval_only=True))
-    pos_real = embed(fetch_clips("real", eval_only=False))
+    neg = embed(fetch_clips(eval_only=True, not_said=NAME))
+    pos_real = embed(fetch_clips(eval_only=False, said=NAME))
     pos_synth = synthetic_positive_feats()
     pos = np.concatenate([p for p in (pos_real, pos_synth) if len(p)]) \
         if (len(pos_real) or len(pos_synth)) else np.empty((0, 16, 96), np.float32)
-    print(f"  held-out false wakes: {len(neg)}   real positives: {len(pos_real)}   "
+    print(f"  held-out negatives: {len(neg)}   real positives: {len(pos_real)}   "
           f"synthetic positives: {len(pos_synth)}")
     if len(neg) == 0 and len(pos) == 0:
         print("  no evaluation data available yet; skipping (label some clips first).")

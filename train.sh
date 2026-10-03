@@ -69,7 +69,7 @@ echo ""
 # ── Optional: pull the puck's flagged false wakes as hard negatives ──────────
 if [ -n "${ORCHESTRATOR_URL:-}" ] && [ -n "${PULL_NEGATIVES:-}" ]; then
     echo "=== Pulling false-positive hard negatives from $ORCHESTRATOR_URL ==="
-    python /app/pull_negatives.py
+    MODEL_NAME="$MODEL_NAME" python /app/pull_negatives.py
     echo ""
 fi
 

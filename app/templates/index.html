@@ -24,7 +24,7 @@
 <form method="post" action="/start">
     <label>
         Wake Word
-        <input type="text" name="wake_word" placeholder="e.g. hey nanoclaw" required
+        <input type="text" id="ww" name="wake_word" placeholder="e.g. hey tars" required
                value="{{ state.params.wake_word if state.params else '' }}">
     </label>
 
@@ -61,32 +61,21 @@
     </details>
 
     <div style="margin-top:1rem;padding:.75rem;border:1px solid #888;border-radius:8px">
-        <strong>Hard negatives from the puck</strong>
-        {% if negatives and negatives.url %}
-            {% if negatives.reachable %}
-                <p style="margin:.3rem 0">
-                    <strong>{{ negatives.count }}</strong> flagged false positive(s) available at
-                    <code>{{ negatives.url }}</code> — checking the box folds them into training.
-                </p>
-            {% else %}
-                <p style="margin:.3rem 0;color:#c00">
-                    Orchestrator at <code>{{ negatives.url }}</code> is unreachable.
-                </p>
-            {% endif %}
-        {% else %}
-            <p style="margin:.3rem 0">
-                Enter the puck's URL to pull its flagged false positives as hard negatives.
-            </p>
-        {% endif %}
+        <strong>Real clips from the puck</strong>
+        <p style="margin:.3rem 0" class="muted">
+            Selected by what was actually <em>said</em> in each reviewed clip (the puck's
+            &ldquo;actually said&rdquo; control), so the other wake word's clips never become
+            this one's negatives. Unreviewed clips are never used.
+        </p>
         <label>
             Orchestrator URL
-            <input type="text" name="orchestrator_url" placeholder="http://192.168.1.145:8100"
+            <input type="text" id="orch" name="orchestrator_url" placeholder="http://192.168.1.145"
                    value="{{ negatives.url if negatives else '' }}">
         </label>
+        <div id="clips" aria-live="polite"><p class="muted">Enter a wake word to see its clips.</p></div>
         <label>
-            <input type="checkbox" name="include_negatives" value="true"
-                   {% if negatives and negatives.count %}checked{% endif %}>
-            Include flagged false positives as hard negatives
+            <input type="checkbox" id="include_negatives" name="include_negatives" value="true">
+            Train on the negatives (held-out slice excluded)
         </label>
         <label>
             <input type="checkbox" name="push_model" value="true">
@@ -96,4 +85,90 @@
 
     <button type="submit">Start Training</button>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const ww = document.getElementById("ww"), orch = document.getElementById("orch");
+  const box = document.getElementById("clips"), neg = document.getElementById("include_negatives");
+  let negTouched = false, timer = null, seq = 0, player = null;
+  neg.addEventListener("change", () => { negTouched = true; });
+
+  const el = (tag, props = {}, ...kids) => {
+    const n = Object.assign(document.createElement(tag), props);
+    kids.forEach(k => n.append(k));
+    return n;
+  };
+  const msg = (text, cls = "muted") => el("p", {className: cls, textContent: text});
+
+  function table(rows, kind) {
+    if (!rows.length) return msg(`No ${kind} yet.`);
+    const head = el("tr", {}, ...["", "When", "Fired", "Said", "Score", "Use"]
+      .map(h => el("th", {textContent: h})));
+    const body = rows.map(r => {
+      const play = el("button", {type: "button", className: "outline secondary play",
+                                 textContent: "\u25B6", title: "Play clip"});
+      play.addEventListener("click", () => {
+        if (player) player.pause();
+        player = new Audio(r.audio);
+        player.play();
+      });
+      const use = kind === "positives" ? "eval" : (r.eval ? "held out (eval)" : "train");
+      return el("tr", {},
+        el("td", {}, play),
+        el("td", {textContent: (r.ts || r.id).replace("T", " ")}),
+        el("td", {textContent: r.fired + (r.near_miss ? " (near miss)" : "")}),
+        el("td", {textContent: r.said}),
+        el("td", {textContent: r.score == null ? "" : Number(r.score).toFixed(2)}),
+        el("td", {textContent: use}));
+    });
+    return el("div", {className: "overflow-auto"},
+      el("table", {className: "striped"}, el("thead", {}, head), el("tbody", {}, ...body)));
+  }
+
+  function render(d) {
+    box.replaceChildren();
+    if (!d.ok) {
+      box.append(msg(d.error, "error"));
+      if (!negTouched) neg.checked = false;
+      return;
+    }
+    const train = d.negatives.filter(r => !r.eval).length;
+    const held = d.negatives.length - train;
+    box.append(el("p", {},
+      el("strong", {textContent: d.model}), ": ",
+      `${d.positives.length} positive(s) (said; evaluation only) \u00b7 ` +
+      `${d.negatives.length} negative(s) \u2014 ${train} for training, ${held} held out for evaluation`));
+    if (!d.puck_models.includes(d.model)) {
+      box.append(msg(`No model named "${d.model}" on the puck (it has: ${d.puck_models.join(", ") || "none"}). ` +
+        `No clips can match, and deploying would ADD a new model instead of replacing one.`, "error"));
+    }
+    box.append(
+      el("details", {}, el("summary", {textContent: `Positives (${d.positives.length})`}),
+         table(d.positives, "positives")),
+      el("details", {}, el("summary", {textContent: `Negatives (${d.negatives.length})`}),
+         table(d.negatives, "negatives")));
+    if (!negTouched) neg.checked = train > 0;
+  }
+
+  async function refresh() {
+    const word = ww.value.trim();
+    if (!word) { box.replaceChildren(msg("Enter a wake word to see its clips.")); return; }
+    const mine = ++seq;
+    box.replaceChildren(msg("Loading clips\u2026"));
+    const q = new URLSearchParams({wake_word: word, url: orch.value.trim()});
+    try {
+      const d = await (await fetch(`/api/clips?${q}`)).json();
+      if (mine === seq) render(d);
+    } catch (e) {
+      if (mine === seq) render({ok: false, error: `Couldn't load clips: ${e}`});
+    }
+  }
+  const later = () => { clearTimeout(timer); timer = setTimeout(refresh, 400); };
+  ww.addEventListener("input", later);
+  orch.addEventListener("input", later);
+  refresh();
+})();
+</script>
 {% endblock %}
