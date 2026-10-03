@@ -48,7 +48,7 @@ oww = Model(
 | Mount Point | Purpose |
 |-------------|---------|
 | `/data` | Cached datasets and intermediate training data (~12GB first run) |
-| `/output` | Where the trained `.onnx` and `.tflite` models are written |
+| `/output` | Where the trained `.onnx` model is written |
 
 The `/data` volume persists across runs so datasets only download once. Intermediate generated clips are also cached per wake word, so re-running with the same wake word skips clip generation.
 
@@ -60,7 +60,7 @@ The training pipeline has 5 stages:
 2. **Generate config** — merges environment variables into `config.template.yml`
 3. **Generate synthetic clips** — uses Piper TTS to create thousands of clips of the wake word (and adversarial near-misses) across many synthetic voices
 4. **Augment clips** — applies room reverb, background noise, and other augmentations to make synthetic clips more realistic
-5. **Train model** — trains a small DNN classifier and exports to ONNX + TFLite
+5. **Train model** — trains a small DNN classifier and exports it to ONNX (what openWakeWord on the puck loads)
 
 ## Hardware Requirements
 
@@ -81,7 +81,7 @@ See `openwakeword/examples/custom_model.yml` for full documentation of all field
 
 ## Troubleshooting
 
-**TFLite conversion fails**: The `.onnx` model is still produced and works fine with openwakeword using `inference_framework="onnx"`. TFLite conversion depends on `tensorflow-cpu==2.8.1` which has strict dependency requirements.
+**No `.tflite` output**: TFLite conversion is no longer attempted. It failed on every run (the image's `tensorflow-cpu==2.8.1` can't run against its protobuf), and the puck loads the `.onnx` (`inference_framework="onnx"`).
 
 **Out of memory during clip generation**: Reduce `tts_batch_size` in `config.template.yml`.
 

@@ -74,37 +74,28 @@ if [ -n "${ORCHESTRATOR_URL:-}" ] && [ -n "${PULL_NEGATIVES:-}" ]; then
 fi
 
 # ── Step 5: Train model ─────────────────────────────────────────────────────
-# PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python works around the bundled
-# TensorFlow's stale _pb2 files being rejected by protobuf>=3.20's C++ runtime
-# (only matters for the ONNX→TFLite conversion; the puck uses the ONNX directly).
+# ONNX only: the puck runs the .onnx. (--convert_to_tflite died on every run —
+# the image's TF 2.8.1 can't run against its protobuf — and the `|| true`-style
+# guard it needed also swallowed genuine training failures.) Under set -e a
+# failed train.py now fails the run.
+OUTPUT_DIR="/data/training_output"
+# Remove the previous build first so a run can never "succeed" by re-copying a
+# stale model left over from an earlier training.
+rm -f "$OUTPUT_DIR/$MODEL_NAME.onnx"
 echo "=== Step 5/5: Training model ==="
-PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python \
-    python openwakeword/train.py --training_config /app/config.yaml --train_model --convert_to_tflite || {
-    echo "  NOTE: train.py exited with an error (likely TFLite conversion failure)."
-    echo "  Checking if the ONNX model was still produced..."
-}
+python openwakeword/train.py --training_config /app/config.yaml --train_model
 echo ""
 
-# ── Copy output models ───────────────────────────────────────────────────────
-echo "=== Copying output models to /output/ ==="
-OUTPUT_DIR="/data/training_output"
+# ── Copy output model ────────────────────────────────────────────────────────
+echo "=== Copying output model to /output/ ==="
 mkdir -p /output
-
-if [ -f "$OUTPUT_DIR/$MODEL_NAME.onnx" ]; then
-    cp "$OUTPUT_DIR/$MODEL_NAME.onnx" /output/
-    echo "  Copied $MODEL_NAME.onnx"
-else
-    echo "  WARNING: $MODEL_NAME.onnx not found"
+if [ ! -f "$OUTPUT_DIR/$MODEL_NAME.onnx" ]; then
+    echo "  ERROR: train.py finished but $OUTPUT_DIR/$MODEL_NAME.onnx was not produced"
+    exit 1
 fi
-
-if [ -f "$OUTPUT_DIR/$MODEL_NAME.tflite" ]; then
-    cp "$OUTPUT_DIR/$MODEL_NAME.tflite" /output/
-    echo "  Copied $MODEL_NAME.tflite"
-else
-    echo "  WARNING: $MODEL_NAME.tflite not found (ONNX model is still usable)"
-    echo "  TFLite conversion can fail due to tensorflow version constraints."
-    echo "  You can convert manually later if needed."
-fi
+cp "$OUTPUT_DIR/$MODEL_NAME.onnx" /output/
+echo "  Copied $MODEL_NAME.onnx"
+echo ""
 
 # ── Evaluate the candidate against the currently-deployed model (advisory) ───
 # Held-out false wakes + confirmed-real wakes the model never trained on, so the
